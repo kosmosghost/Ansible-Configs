@@ -14,3 +14,4 @@ Add a new host file with the appropriate IP address for the server you are confi
 
 Replace <SSH_USER> with the username on the remote machine you will be connecting to.
 
+# It is advisable to run mysql_secure_installation after running this script.

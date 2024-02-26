@@ -271,7 +271,7 @@
      lineinfile:
       path: /var/www/html/nextcloud/config/config.php
       search_string: "'overwrite.cli.url' => 'http://localhost',"
-      line: "'overwrite.cli.url' => '{{SERVER_NAME}}',"
+      line: "'overwrite.cli.url' => 'https://{{SERVER_NAME}}',"
 
    - name: Rebooting machine
      reboot:
@@ -291,10 +291,63 @@
        cmd: sudo -u www-data php occ encryption:enable
        chdir: /var/www/html/nextcloud
 
-   - name: Install Nextcloud
-     ansible.builtin.command: 
-       cmd: sudo -u www-data php occ 
-       chdir: /var/www/html/nextcloud
+   - name: Add Cronjob
+     cron:
+      name: "Create cronjob for Nextcloud"
+      minute: "*/5"
+      job: "php -f /var/www/html/nextcloud/cron.php"
+      user: www-data
+
+   - name: 'Create Logging Directory'
+     file:
+      path: '/var/log/user/'
+      owner: www-data
+      group: www-data
+      recurse: yes
+      mode: '0700'
+
+   - name: 'Create www-data Home Directory'
+     file:
+      path: '/home/www-data'
+      owner: www-data
+      group: www-data
+      recurse: yes
+      mode: '0744'
+
+   - name: Add cronjob for Automatic Nextcloud Updater
+     cron:
+      name: "Automatic Nextcloud Updater"
+      minute: "30"
+      hour: "11"
+      weekday: "5"
+      user: www-data
+      job: bash /home/www-data/nextcloud-update.sh && echo "$(date) Nextcloud Update" >> /var/log/user/nextcloud-update.txt
+   
+   - name: Add cronjob for system update.
+     cron:
+      name: "apt update"
+      minute: "0"
+      hour: "9"
+      job: apt update && echo "$(date) APT UPDATE COMPLETE" >> /var/log/user/system-update.txt
+
+   - name: Add cronjob for system upgrade
+     cron:
+      name: "apt download"
+      minute: "30"
+      hour: "9"
+      job: apt upgrade --download-only && echo "$(date) APT UPGRADES DOWNLOADED" >> /var/log/user/system-update.txt
+
+   - name: cronjob apt upgrade
+     cron:
+      name: apt upgrade
+      minute: "30"
+      hour: "10"
+      job: apt upgrade -y && echo "$(date) APT UPGRADE -Y" >> /var/log/user/system-update.txt
+
+   - name: Copy Nextcloud update script
+     copy:
+      src: templates/nextcloud.sh.j2
+      dest: /home/www-data/nextcloud-update.sh
 
    - name: Rebooting machine
      reboot:
