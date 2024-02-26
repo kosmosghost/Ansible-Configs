@@ -1,0 +1,32 @@
+<?php
+$CONFIG = array (
+  'instanceid' => '12344566',
+  'passwordsalt' => '123456',
+  'secret' => '123456',
+  'trusted_domains' => 
+  array (
+    0 => 'server.local',
+  ),
+  'datadirectory' => '/Nextcloud',
+  'dbtype' => 'mysql',
+  'version' => '1.1.1.1',
+  'overwrite.cli.url' => 'https://server.local',
+  'dbname' => 'database',
+  'dbhost' => '192.168.1.1',
+  'dbport' => '',
+  'dbtableprefix' => 'oc_',
+  'mysql.utf8mb4' => true,
+  'dbuser' => 'Frodo',
+  'dbpassword' => 'password',
+  'installed' => true,
+  'memcache.local' => '\\OC\\Memcache\\APCu',
+  'memcache.locking' => '\\OC\\Memcache\\Redis',
+  'memcache.distributed' => '\OC\Memcache\Redis',
+  'redis' => 
+  array (
+    'host' => '/var/run/redis/redis-server.sock',
+    'port' => 0,
+  ),
+  'maintenance' => false,
+  'loglevel' => 2,
+);

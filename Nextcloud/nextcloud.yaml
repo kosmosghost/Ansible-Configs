@@ -1,0 +1,300 @@
+---
+ - hosts: nextcloud
+   become: true
+   become_user: root
+   vars_prompt:
+   - name: NEXTCLOUDSRC
+     prompt: Name of .zip file located in 'files/*' usually called latest.zip
+     private: no
+   - name: NEXTCLOUD_DATA
+     prompt: Enter the location that Nextcloud will store user's data files on the server.
+     private: no
+   - name: SERVER_NAME
+     prompt: Enter Nextcloud Server Name.
+     private: no
+   - name: SSL_KEYNAME
+     prompt: Enter the name of the ssl keys in 'keys/*' WITHOUT the extension. IE if files are called 'server.crt' and 'server.key' only enter 'server'.
+     private: no
+   - name: DB_ROOT_PASSWD
+     prompt: Enter a password for the MariaDB Root User. 'Note:' The Nextcloud database name will be nextcloud.
+     private: yes
+   - name: DB_USER
+     prompt: Enter the username for the MariaDB nextcloud database.
+     private: yes
+   - name: DB_USER_PASSWD
+     prompt: Enter a password for the MariaDB nextcloud database.
+     private: yes
+   - name: NEXTCLOUD_ADMIN
+     prompt: Nextcloud Username
+     private: no
+   - name: NEXTCLOUD_ADMIN_PASSWD
+     prompt: Nextcloud username password.
+     private: yes
+   tasks:
+   - name: Update System Cache
+     apt: update_cache=yes
+   - name: Update System Packages
+     apt: upgrade=yes
+
+   - name: 'Rebooting Server'
+     reboot: 
+
+   - name: Install Nextcloud Dependencies
+     apt: name=nginx,php8.2,php8.2-fpm,php8.2-common,php8.2-curl,php8.2-xml,php8.2-gd,php-json,php8.2-mbstring,php8.2-zip,openssl,php8.2-mysql,php8.2-bz2,php8.2-intl,php-ldap,php-imap,php-bcmath,php-apcu,redis-server,php-redis,ffmpeg,mariadb-server,unzip,python3-pymysql
+   - name: Copy Nextcloud to /var/www/html/
+     copy:
+      src: "files/{{NEXTCLOUDSRC}}"
+      dest: /var/www/html/
+      owner: www-data
+      group: www-data
+   - name: unzip Nextcloud zip package into /var/www/html/nextcloud/
+     unarchive:
+       remote_src: yes
+       src: /var/www/html/latest.zip
+       dest: /var/www/html/
+       owner: www-data
+       group: www-data
+
+
+   - name: Copy nextcloud nginx config to proper directory.
+     template:
+      src: templates/nginx.j2
+      dest: /etc/nginx/sites-available/nextcloud.conf
+      group: www-data
+      owner: www-data
+
+   - name: Create symlink
+     file:
+      src: /etc/nginx/sites-available/nextcloud.conf
+      dest: /etc/nginx/sites-enabled/nextcloud.conf
+      group: www-data
+      owner: www-data
+      state: link
+
+   - name: create /etc/ssl/nginx/ Folder
+     file:
+      dest: /etc/ssl/nginx/
+      state: directory
+
+   - name: copy server keys to client
+     copy:
+      src: 'keys/{{SSL_KEYNAME}}.key'
+      dest: /etc/ssl/nginx/
+
+   - name: copy server keys to client
+     copy:
+      src: 'keys/{{SSL_KEYNAME}}.crt'
+      dest: /etc/ssl/nginx/
+
+   - name: 'Modify /etc/php/8.2/10-opcache'
+     blockinfile:
+      path: /etc/php/8.2/fpm/conf.d/10-opcache.ini
+      block: |
+       opcache.enable=1
+       opcache.interned_strings_buffer=8
+       opcache.max_accelerated_files=10000
+       opcache.memory_consumption=128
+       opcache.save_comments=1
+       opcache.revalidate_freq=1
+       opcache.jit = 1255
+       opcache.jit_buffer_size = 128M
+
+   - name: 'Uncomment line clear_env = no'
+     lineinfile:
+      path: /etc/php/8.2/fpm/pool.d/www.conf
+      regexp: '^#clear_env = no'
+      line: clear_env = no
+
+   - name: 'pm.max_children = 5 to 120'
+     lineinfile:
+      path: /etc/php/8.2/fpm/pool.d/www.conf
+      regexp: '^pm.max_children = 5'
+      line: pm.max_children = 120
+
+   - name: 'pm.start_servers = 2 to 12'
+     lineinfile:
+      path: /etc/php/8.2/fpm/pool.d/www.conf
+      regexp: '^pm.start_servers = 2'
+      line: 'pm.start_servers = 12'
+
+   - name: 'pm.min_spare_servers = 1 to 6'
+     lineinfile:
+      path: /etc/php/8.2/fpm/pool.d/www.conf
+      regexp: '^pm.min_spare_servers = 1'
+      line: pm.min_spare_servers = 6
+
+   - name: 'pm.max_spare_servers = 3 to 18'
+     lineinfile:
+      path: /etc/php/8.2/fpm/pool.d/www.conf
+      regexp: '^pm.max_spare_servers = 3'
+      line: pm.max_spare_servers = 18
+
+   - name: 'Edit Memory Limit in php.ini'
+     lineinfile:
+      path: /etc/php/8.2/fpm/php.ini
+      regexp: '^memory_limit = 128M'
+      line: memory_limit = 512M
+
+   - name: 'Edit post_max_size to 60G'
+     lineinfile:
+      path: /etc/php/8.2/fpm/php.ini
+      regexp: '^post_max_size = 8M'
+      line: post_max_size = 60G
+
+   - name: 'Edit upload_max_size to 60G'
+     lineinfile:
+      path: /etc/php/8.2/fpm/php.ini
+      regexp: '^upload_max_filesize = 2M'
+      line: upload_max_filesize = 60G
+
+   - name:
+     lineinfile:
+      path: /etc/php/8.2/fpm/php.ini
+      regexp: '^;upload_tmp_dir ='
+      line: upload_tmp_dir = {{NEXTCLOUD_DATA}}/TEMP
+
+   - name: 'Add to 20-apcu.ini'
+     lineinfile:
+      path: /etc/php/8.2/fpm/conf.d/20-apcu.ini
+      line: apc.enable_cli=1
+
+   - name: Add www-data to redis group 
+     user: 
+      name=www-data
+      groups=redis
+      append=yes
+   
+   - name: 'Create Folder /var/run/redis/'
+     file:
+      path: /var/run/redis/
+      state: directory
+      recurse: yes
+      owner: redis
+      group: redis
+
+   - name: 'uncomment unixsocket /var/run/redis/redis-server.sock'
+     lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^# unixsocket /var/run/redis/redis-server.sock'
+      line: unixsocket /var/run/redis/redis-server.sock
+
+   - name: 'uncomment # unixsocketperm 700'
+     lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^# unixsocketperm 700'
+      line: unixsocketperm 770
+
+   - name: 'change to no'
+     lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^stop-writes-on-bgsave-error yes'
+      line: stop-writes-on-bgsave-error no
+
+   - name: 'change maxmemory policy'
+     lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^# maxmemory-policy noeviction'
+      line: maxmemory-policy allkeys-lru
+
+
+   - name: Modify mariadb config.
+     template:
+      src: templates/mariadb.j2
+      dest: /etc/mysql/mariadb.conf.d/50-server.cnf
+      group: root
+      owner: root
+
+   - name: 'set correct permissions'
+     file:
+      path: /var/www/html/nextcloud/
+      owner: www-data
+      group: www-data
+      recurse: yes
+      mode: '0700'
+
+   - name: 'Create Nextcloud Data Directory'
+     file:
+      path: '{{ NEXTCLOUD_DATA }}/DATA'
+      owner: www-data
+      group: www-data
+      recurse: yes
+      mode: '0700'
+
+   - name: 'Create Nextcloud Temp Directory'
+     file:
+      path: '{{ NEXTCLOUD_DATA }}/TEMP'
+      owner: www-data
+      group: www-data
+      recurse: yes
+      mode: '0700'
+
+   - name: 'Create Nextcloud database'
+     ansible.builtin.command: /usr/bin/mariadb -e "CREATE DATABASE IF NOT EXISTS nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+
+   - name: 'Create database user'
+     ansible.builtin.command: /usr/bin/mariadb -e "CREATE USER '{{DB_USER}}'@'localhost' IDENTIFIED BY '{{DB_USER_PASSWD}}'"
+
+   - name: 'Grant privileges to Nextcloud DB'
+     ansible.builtin.command: /usr/bin/mariadb -e "GRANT ALL PRIVILEGES on nextcloud.* to '{{DB_USER}}'@'localhost'"
+
+   - name: 'Flush privileges'
+     ansible.builtin.command: /usr/bin/mariadb -e "FLUSH privileges"
+   
+   - name: Install Nextcloud
+     ansible.builtin.command: 
+       cmd: sudo -u www-data php occ maintenance:install --database mysql --database-name nextcloud --database-host localhost --database-user {{DB_USER}} --database-pass {{DB_USER_PASSWD}} --admin-user {{NEXTCLOUD_ADMIN}} --admin-pass {{NEXTCLOUD_ADMIN_PASSWD}} --data-dir {{NEXTCLOUD_DATA}}
+       chdir: /var/www/html/nextcloud
+
+   - name: Modify config.php to allow caching.
+     ansible.builtin.blockinfile:
+       path: /var/www/html/nextcloud/config/config.php
+       insertafter: "  'installed' => true,"
+       block: |
+         'memcache.local' => '\\OC\\Memcache\\APCu',
+         'memcache.locking' => '\\OC\\Memcache\\Redis',
+         'memcache.distributed' => '\OC\Memcache\Redis',
+         'redis' => 
+         array (
+           'host' => '/var/run/redis/redis-server.sock',
+           'port' => 0,
+         ),
+         'maintenance' => false,
+         'loglevel' => 2,
+
+   - name: 'Change config.php'
+     lineinfile:
+      path: /var/www/html/nextcloud/config/config.php
+      search_string: "0 => 'localhost',"
+      line: 0 => '{{SERVER_NAME}}'
+
+   - name: 'Change config.php'
+     lineinfile:
+      path: /var/www/html/nextcloud/config/config.php
+      search_string: "'overwrite.cli.url' => 'http://localhost',"
+      line: "'overwrite.cli.url' => '{{SERVER_NAME}}',"
+
+   - name: Rebooting machine
+     reboot:
+
+   - name: Enable encryption app
+     ansible.builtin.command: 
+       cmd: sudo -u www-data php occ app:enable encryption
+       chdir: /var/www/html/nextcloud
+
+   - name: Set default encryption module
+     ansible.builtin.command: 
+       cmd: sudo -u www-data php occ encryption:set-default-module OC_DEFAULT_MODULE
+       chdir: /var/www/html/nextcloud
+
+   - name: Enable Encryption
+     ansible.builtin.command: 
+       cmd: sudo -u www-data php occ encryption:enable
+       chdir: /var/www/html/nextcloud
+
+   - name: Install Nextcloud
+     ansible.builtin.command: 
+       cmd: sudo -u www-data php occ 
+       chdir: /var/www/html/nextcloud
+
+   - name: Rebooting machine
+     reboot:

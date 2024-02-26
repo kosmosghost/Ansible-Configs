@@ -1,0 +1,5 @@
+!/Nextcloud/files/README.md
+/Nextcloud/files/*
+/Nextcloud/keys/*
+!/Nextcloud/keys/README.md
+/Nextcloud/host
