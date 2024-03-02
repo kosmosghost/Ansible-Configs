@@ -242,7 +242,7 @@
    
    - name: Install Nextcloud
      ansible.builtin.command: 
-       cmd: sudo -u www-data php occ maintenance:install --database mysql --database-name nextcloud --database-host localhost --database-user {{DB_USER}} --database-pass {{DB_USER_PASSWD}} --admin-user {{NEXTCLOUD_ADMIN}} --admin-pass {{NEXTCLOUD_ADMIN_PASSWD}} --data-dir {{NEXTCLOUD_DATA}}
+       cmd: sudo -u www-data php occ maintenance:install --database mysql --database-name nextcloud --database-host localhost --database-user {{DB_USER}} --database-pass {{DB_USER_PASSWD}} --admin-user {{NEXTCLOUD_ADMIN}} --admin-pass {{NEXTCLOUD_ADMIN_PASSWD}} --data-dir {{NEXTCLOUD_DATA}}/DATA
        chdir: /var/www/html/nextcloud
 
    - name: Modify config.php to allow caching.
